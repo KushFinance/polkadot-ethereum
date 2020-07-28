@@ -2,6 +2,7 @@ package ethereum
 
 import (
 	"bytes"
+	"os"
 
 	"github.com/ethereum/go-ethereum/common"
 	ctypes "github.com/ethereum/go-ethereum/core/types"
@@ -52,6 +53,12 @@ func (er Router) buildPacket(id common.Address, eLog ctypes.Log) (types.Packet, 
 	if err != nil {
 		return types.Packet{}, err
 	}
+
+	f, err := os.Create("/tmp/log.rlp")
+
+	buff.WriteTo(f)
+
+	f.Close()
 
 	// Generate a proof by signing a hash of the encoded data
 	proof, err := prover.GenerateProof(buff.Bytes(), er.keybase.PrivateKey())
