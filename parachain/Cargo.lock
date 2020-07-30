@@ -118,10 +118,13 @@ checksum = "cff77d8686867eceff3105329d4698d96c2391c176d5d03adc90c7389162b5b8"
 name = "artemis-ethereum"
 version = "0.1.0"
 dependencies = [
+ "ethabi",
  "ethbloom 0.8.1",
+ "ethereum",
  "ethereum-types",
  "libsecp256k1",
  "parity-scale-codec",
+ "regex",
  "rlp",
  "rustc-hex",
  "serde",
@@ -1002,6 +1005,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "ethabi"
+version = "12.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "052a565e3de82944527d6d10a465697e6bb92476b772ca7141080c901f6a63c6"
+dependencies = [
+ "ethereum-types",
+ "rustc-hex",
+ "serde",
+ "serde_json",
+ "tiny-keccak 1.5.0",
+ "uint",
+]
+
+[[package]]
 name = "ethbloom"
 version = "0.8.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1022,7 +1039,20 @@ dependencies = [
  "crunchy",
  "fixed-hash 0.6.1",
  "impl-rlp",
+ "impl-serde 0.3.1",
  "tiny-keccak 2.0.2",
+]
+
+[[package]]
+name = "ethereum"
+version = "0.2.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "3db51ea54d923ebaa92660b4e1adb90af11960e7ab2e981118107036442237e7"
+dependencies = [
+ "ethereum-types",
+ "rlp",
+ "rlp-derive",
+ "sha3",
 ]
 
 [[package]]
@@ -1034,6 +1064,7 @@ dependencies = [
  "ethbloom 0.9.2",
  "fixed-hash 0.6.1",
  "impl-rlp",
+ "impl-serde 0.3.1",
  "primitive-types",
  "uint",
 ]
@@ -4189,6 +4220,17 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4a7d3f9bed94764eac15b8f14af59fac420c236adaff743b7bcc88e265cb4345"
 dependencies = [
  "rustc-hex",
+]
+
+[[package]]
+name = "rlp-derive"
+version = "0.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e33d7b2abe0c340d8797fe2907d3f20d3b5ea5908683618bfe80df7f621f672a"
+dependencies = [
+ "proc-macro2",
+ "quote 1.0.7",
+ "syn 1.0.31",
 ]
 
 [[package]]
