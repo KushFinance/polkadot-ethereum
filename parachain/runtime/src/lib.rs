@@ -8,7 +8,7 @@
 include!(concat!(env!("OUT_DIR"), "/wasm_binary.rs"));
 
 use frame_support::traits::StorageMapShim;
-use sp_core::{crypto::KeyTypeId, OpaqueMetadata};
+use sp_core::{U256, crypto::KeyTypeId, OpaqueMetadata};
 use sp_runtime::{
 	ApplyExtrinsicResult, generic, create_runtime_str, impl_opaque_keys, MultiSignature,
 	transaction_validity::{TransactionValidity, TransactionSource},
@@ -287,7 +287,7 @@ impl dummy_verifier::Trait for Runtime {
 }
 
 impl balances::Trait<balances::Instance2> for Runtime {
-	type Balance = u128; // We'll need to use a BigNum (U256) for PolkaETH
+	type Balance = U256; // We'll need to use a BigNum (U256) for PolkaETH
 	type Event = Event;
 	type DustRemoval = ();
 	type ExistentialDeposit = ExistentialDeposit;
@@ -308,7 +308,6 @@ impl polkaeth_app::Trait for Runtime {
 
 impl polkaerc20_app::Trait for Runtime {
 	type Event = Event;
-	type Balance = u128;
 }
 
 construct_runtime!(

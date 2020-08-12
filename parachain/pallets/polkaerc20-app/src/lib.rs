@@ -3,13 +3,10 @@
 /// Implementation for PolkaERC20 token assets
 ///
 use sp_std::prelude::*;
-use sp_std::{fmt::Debug, convert::TryInto};
-use sp_core::H160;
-use sp_runtime::traits::{
-	CheckedAdd, MaybeSerializeDeserialize, Member,  AtLeast32BitUnsigned};
+use sp_core::{H160, U256};
 use frame_system::{self as system};
 use frame_support::{
-	decl_error, decl_event, decl_module, decl_storage, Parameter,
+	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{DispatchResult, DispatchError},
 	storage::StorageDoubleMap
 };
@@ -27,18 +24,12 @@ mod tests;
 
 pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-
-	type Balance: Parameter + Member + AtLeast32BitUnsigned + Default + Copy + Debug + MaybeSerializeDeserialize;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as PolkaERC20Map {
-		// Free balances are represent as a doublemap: (TokenAddr, AccountId) -> Balance
-		//
-		// The choice of hashers was influenced by pallet-generic-asset, where free balances
-		// are also represented using a StorageDouble with twox_64_concat and blake2_128_concat
-		// hashers. So I'm assuming its a safe choice.
-		pub FreeBalance: double_map hasher(twox_64_concat) H160, hasher(blake2_128_concat) T::AccountId => T::Balance;
+		pub TotalIssuance: map hasher(blake2_128_concat) H160 => U256;
+		pub FreeBalance: double_map hasher(blake2_128_concat) H160, hasher(blake2_128_concat) T::AccountId => U256;
 	}
 }
 
@@ -46,9 +37,8 @@ decl_event!(
 	pub enum Event<T>
 	where
 		AccountId = <T as system::Trait>::AccountId,
-		BalanceERC20 = <T as Trait>::Balance,
 	{
-		Minted(H160, AccountId, BalanceERC20),
+		Minted(AccountId, H160, U256),
 	}
 );
 
@@ -56,6 +46,8 @@ decl_error! {
 	pub enum Error for Module<T: Trait> {
 		/// Free balance got overflowed after minting.
 		FreeMintingOverflow,
+		/// Total issuance got overflowed after minting.
+		TotalMintingOverflow,
 	}
 }
 
@@ -76,16 +68,16 @@ impl<T: Trait> Module<T> {
 		T::AccountId::decode(&mut &data[..]).ok()
 	}
 
-	fn u128_to_balance(input: u128) -> Option<T::Balance>  {
-		input.try_into().ok()
-	}
-
-	fn do_mint(token_addr: H160, to: &T::AccountId, amount: T::Balance) -> DispatchResult {
+	fn do_mint(token_addr: H160, to: &T::AccountId, amount: U256) -> DispatchResult {
+		let current_total_issuance = <TotalIssuance>::get(&token_addr);
 		let original_free_balance = <FreeBalance<T>>::get(&token_addr, to);
-		let value = original_free_balance.checked_add(&amount)
+		let new_total_issuance = current_total_issuance.checked_add(amount)
+		.ok_or(Error::<T>::TotalMintingOverflow)?;
+		let value = original_free_balance.checked_add(amount)
 			.ok_or(Error::<T>::FreeMintingOverflow)?;
 		<FreeBalance<T>>::insert(&token_addr, to, value);
-		Self::deposit_event(RawEvent::Minted(token_addr, to.clone(), amount));
+		<TotalIssuance>::insert(&token_addr, new_total_issuance);
+		Self::deposit_event(RawEvent::Minted(to.clone(), token_addr, amount));
 		Ok(())
 	}
 
@@ -98,13 +90,7 @@ impl<T: Trait> Module<T> {
 						return Err(DispatchError::Other("Invalid sender account"))
 					}
 				};
-				let balance = match Self::u128_to_balance(amount.as_u128()) {
-					Some(balance) => balance,
-					None => {
-						return Err(DispatchError::Other("Invalid amount"))
-					}
-				};
-				Self::do_mint(token, &account, balance)
+				Self::do_mint(token, &account, amount)
 			}
 			_ => {
 				// Ignore all other ethereum events. In the next milestone the

@@ -6,13 +6,12 @@ use frame_system::{self as system, ensure_signed};
 use frame_support::{
 	decl_error, decl_event, decl_module, decl_storage,
 	dispatch::{DispatchResult, DispatchError},
-	traits::{Currency, ExistenceRequirement, WithdrawReason, WithdrawReasons},
+	storage::StorageMap
 };
+use sp_core::{U256, RuntimeDebug};
 use sp_std::prelude::*;
 use artemis_core::{AppID, Application, Message};
-use codec::Decode;
-
-use sp_std::convert::TryInto;
+use codec::{Encode, Decode};
 
 use artemis_ethereum::{self as ethereum, SignedMessage};
 
@@ -22,22 +21,20 @@ mod mock;
 #[cfg(test)]
 mod tests;
 
-pub type PolkaETH<T> =
-	<<T as Trait>::Currency as Currency<<T as system::Trait>::AccountId>>::Balance;
+
+#[derive(Encode, Decode, Clone, PartialEq, Eq, Default, RuntimeDebug)]
+pub struct AccountData {
+	free: U256,
+}
 
 pub trait Trait: system::Trait {
 	type Event: From<Event<Self>> + Into<<Self as system::Trait>::Event>;
-
-	type Currency: Currency<Self::AccountId>;
 }
 
 decl_storage! {
 	trait Store for Module<T: Trait> as PolkaETHModule {
-
-	}
-	add_extra_genesis {
-		config(dummy): bool;
-		build(|_| {});
+		pub TotalIssuance: U256;
+		pub Account: map hasher(blake2_128_concat) T::AccountId => AccountData;
 	}
 }
 
@@ -45,17 +42,22 @@ decl_event!(
 	pub enum Event<T>
 	where
 		AccountId = <T as system::Trait>::AccountId,
-		PolkaETH = PolkaETH<T>,
 	{
-		Minted(AccountId, PolkaETH),
-		Burned(AccountId, PolkaETH),
-		Transfer(AccountId, AccountId, PolkaETH),
+		Minted(AccountId, U256),
+		Burned(AccountId, U256),
 	}
 );
 
 decl_error! {
 	pub enum Error for Module<T: Trait> {
-
+		/// Free balance got overflowed after minting.
+		FreeMintingOverflow,
+		/// Total issuance got overflowed after minting.
+		TotalMintingOverflow,
+		/// Free balance got underflowed after burning.
+		FreeBurningUnderflow,
+		/// Total issuance got underflowed after burning.
+		TotalBurningUnderflow,
 	}
 }
 
@@ -67,42 +69,12 @@ decl_module! {
 
 		fn deposit_event() = default;
 
+		/// Burn PolkaETH to release ETH locked up in a bridge contract
 		#[weight = 10_000]
-		fn transfer(origin, to: T::AccountId, amount: PolkaETH<T>, allow_death: bool) -> DispatchResult {
+		fn burn(origin, amount: U256) -> DispatchResult {
 			let who = ensure_signed(origin)?;
-
-			let er = match allow_death {
-				true => ExistenceRequirement::AllowDeath,
-				false => ExistenceRequirement::KeepAlive,
-			};
-
-			T::Currency::transfer(&who, &to, amount, er)?;
-
-			Self::deposit_event(RawEvent::Transfer(who, to, amount));
-			Ok(())
-		}
-
-		///
-		/// To initiate a transfer of PolkaETH to ETH, account holders must burn PolkaETH.
-		///
-		#[weight = 10_000]
-		fn burn(origin, amount: PolkaETH<T>, allow_death: bool) -> DispatchResult {
-			// TODO: verify origin
-			let who = ensure_signed(origin)?;
-
-			// TODO: Add our own reason, the existing ones don't seem to match our needs.
-			let mut reasons = WithdrawReasons::none();
-			reasons.set(WithdrawReason::Transfer);
-
-			let er = match allow_death {
-				true => ExistenceRequirement::AllowDeath,
-				false => ExistenceRequirement::KeepAlive,
-			};
-
-			let _ = T::Currency::withdraw(&who, amount, reasons, er)?;
-
+			Self::do_burn(&who, amount)?;
 			Self::deposit_event(RawEvent::Burned(who, amount));
-
 			Ok(())
 		}
 
@@ -115,14 +87,47 @@ impl<T: Trait> Module<T> {
 		T::AccountId::decode(&mut &data[..]).ok()
 	}
 
-	fn u128_to_balance(input: u128) -> Option<PolkaETH<T>>  {
-		input.try_into().ok()
+	/// Mint PolkaETH for users who have locked up ETH in a bridge contract.
+	fn do_mint(to: &T::AccountId, amount: U256) -> DispatchResult  {
+		if amount.is_zero() {
+			return Ok(())
+		}
+		Self::try_mutate_account(to, |account, is_new| -> Result<(), DispatchError> {
+			let current_total_issuance = <TotalIssuance>::get();
+			let new_total_issuance = current_total_issuance.checked_add(amount)
+			.ok_or(Error::<T>::TotalMintingOverflow)?;
+			account.free = account.free.checked_add(amount)
+				.ok_or(Error::<T>::FreeMintingOverflow)?;
+			<TotalIssuance>::set(new_total_issuance);
+			Ok(())
+		})
 	}
 
-	/// The parachain will mint PolkaETH for users who have locked up ETH in a bridge smart contract.
-	fn do_mint(to: T::AccountId,  amount: PolkaETH<T>) {
-		let _ = T::Currency::deposit_creating(&to, amount);
-		Self::deposit_event(RawEvent::Minted(to, amount));
+	/// Burn PolkaETH to release ETH locked up in a bridge contract
+	fn do_burn(to: &T::AccountId, amount: U256) -> DispatchResult  {
+		if amount.is_zero() {
+			return Ok(())
+		}
+		Self::try_mutate_account(to, |account, is_new| -> Result<(), DispatchError> {
+			let current_total_issuance = <TotalIssuance>::get();
+			let new_total_issuance = current_total_issuance.checked_sub(amount)
+			.ok_or(Error::<T>::TotalBurningUnderflow)?;
+			account.free = account.free.checked_sub(amount)
+				.ok_or(Error::<T>::FreeBurningUnderflow)?;
+			<TotalIssuance>::set(new_total_issuance);
+			Ok(())
+		})
+	}
+
+	fn try_mutate_account<R, E>(
+		who: &T::AccountId,
+		f: impl FnOnce(&mut AccountData, bool) -> Result<R, E>
+	) -> Result<R, E> {
+		<Account<T>>::try_mutate_exists(who, |maybe_account| {
+			let is_new = maybe_account.is_none();
+			let mut account = maybe_account.take().unwrap_or_default();
+			f(&mut account, is_new)
+		})
 	}
 
 	fn handle_event(event: ethereum::Event) -> DispatchResult {
@@ -134,13 +139,8 @@ impl<T: Trait> Module<T> {
 						return Err(DispatchError::Other("Invalid sender account"))
 					}
 				};
-				let balance = match Self::u128_to_balance(amount.as_u128()) {
-					Some(balance) => balance,
-					None => {
-						return Err(DispatchError::Other("Invalid amount"))
-					}
-				};
-				Self::do_mint(account, balance);
+				Self::do_mint(&account, amount)?;
+				Self::deposit_event(RawEvent::Minted(account, amount));
 				Ok(())
 			}
 			_ => {

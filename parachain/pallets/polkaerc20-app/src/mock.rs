@@ -67,15 +67,10 @@ impl system::Trait for MockRuntime {
 	type OnKilledAccount = ();
 }
 
-parameter_types! {
-	pub const ExistentialDeposit: u128 = 500;
-}
-
-
 impl Trait for MockRuntime {
 	type Event = ();
-	type Balance = u128;
 }
+
 
 pub type PolkaERC20 = Module<MockRuntime>;
 

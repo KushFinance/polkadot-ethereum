@@ -20,11 +20,11 @@ fn it_mints() {
 	new_tester().execute_with(|| {
 		let token_addr = H160::zero();
 		let alice: AccountId = Keyring::Alice.into();
-		assert_ok!(PolkaERC20::do_mint(token_addr, &alice, 500));
-		assert_eq!(FreeBalance::<MockRuntime>::get(&token_addr, &alice), 500);
+		assert_ok!(PolkaERC20::do_mint(token_addr, &alice, 500.into()));
+		assert_eq!(FreeBalance::<MockRuntime>::get(&token_addr, &alice), 500.into());
 
-		assert_ok!(PolkaERC20::do_mint(token_addr, &alice, 20));
-		assert_eq!(FreeBalance::<MockRuntime>::get(&token_addr, &alice), 520);
+		assert_ok!(PolkaERC20::do_mint(token_addr, &alice, 20.into()));
+		assert_eq!(FreeBalance::<MockRuntime>::get(&token_addr, &alice), 520.into());
 	});
 }
 
@@ -44,6 +44,6 @@ fn it_handles_ethereum_event() {
 		let bob: AccountId = Keyring::Bob.into();
 
 		assert_ok!(PolkaERC20::handle_event(event));
-		assert_eq!(FreeBalance::<MockRuntime>::get(&token_addr, &bob), 10);
+		assert_eq!(FreeBalance::<MockRuntime>::get(&token_addr, &bob), 10.into());
 	});
 }
