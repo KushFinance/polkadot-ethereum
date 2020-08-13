@@ -76,10 +76,6 @@ path = "../../primitives/ethereum"
 default-features = false
 path = "../../pallets/generic-asset"
 
-[dependencies.pallet-bridge]
-default-features = false
-path = "../../pallets/bridge"
-
 [features]
 default = ['std']
 std = [

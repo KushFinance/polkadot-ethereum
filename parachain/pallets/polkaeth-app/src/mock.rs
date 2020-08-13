@@ -9,7 +9,6 @@ use sp_runtime::{
 use frame_system as system;
 
 use artemis_generic_asset as generic_asset;
-use pallet_bridge as bridge;
 
 use artemis_core::{Broker, AppID, Message};
 
@@ -24,7 +23,6 @@ mod test_events {
 impl_outer_event! {
     pub enum MockEvent for MockRuntime {
 		system<T>,
-		bridge<T>,
 		generic_asset<T>,
         test_events,
     }
@@ -75,22 +73,8 @@ impl generic_asset::Trait for MockRuntime {
 	type Event = MockEvent;
 }
 
-
-pub struct MockBroker;
-impl Broker for MockBroker {
-	fn submit(_app_id: AppID, _message: Message) -> DispatchResult {
-		Ok(())
-	}
-}
-
-impl bridge::Trait for MockRuntime {
-	type Event = MockEvent;
-	type Broker = MockBroker;
-}
-
 impl Trait for MockRuntime {
 	type Event = MockEvent;
-	type Bridge = bridge::Module<MockRuntime>;
 }
 
 pub type System = system::Module<MockRuntime>;

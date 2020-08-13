@@ -10,7 +10,6 @@ use sp_std::convert::{From};
 use frame_system as system;
 
 use artemis_generic_asset as generic_asset;
-use pallet_bridge as bridge;
 
 use artemis_core::{Broker, AppID, Message};
 
@@ -26,7 +25,6 @@ mod test_events {
 impl_outer_event! {
     pub enum MockEvent for MockRuntime {
 		system<T>,
-		bridge<T>,
 		generic_asset<T>,
         test_events,
     }
@@ -84,19 +82,12 @@ impl Broker for MockBroker {
 	}
 }
 
-impl bridge::Trait for MockRuntime {
-	type Event = MockEvent;
-	type Broker = MockBroker;
-}
-
 impl Trait for MockRuntime {
 	type Event = MockEvent;
-	type Bridge = bridge::Module<MockRuntime>;
 }
 
 pub type System = system::Module<MockRuntime>;
 pub type GenericAsset = generic_asset::Module<MockRuntime>;
-pub type Bridge = bridge::Module<MockRuntime>;
 pub type ERC20 = Module<MockRuntime>;
 
 pub fn new_tester() -> sp_io::TestExternalities {

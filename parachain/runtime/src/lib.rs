@@ -291,12 +291,10 @@ impl generic_asset::Trait for Runtime {
 
 impl eth_app::Trait for Runtime {
 	type Event = Event;
-	type Bridge = bridge::Module<Runtime>;
 }
 
 impl erc20_app::Trait for Runtime {
 	type Event = Event;
-	type Bridge = bridge::Module<Runtime>;
 }
 
 construct_runtime!(

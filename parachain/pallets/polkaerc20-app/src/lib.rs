@@ -12,7 +12,7 @@ use frame_support::{
 
 use codec::{Encode, Decode};
 
-use artemis_core::{AppID, Application, RelayEventEmitter, Message};
+use artemis_core::{AppID, Application, Message};
 use artemis_ethereum::{self as ethereum, SignedMessage};
 use artemis_generic_asset as generic_asset;
 
@@ -25,13 +25,12 @@ mod tests;
 pub const APP_ID: &[u8; 32] = &[1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
 
 #[derive(Encode, Decode, Clone, PartialEq, Eq, RuntimeDebug)]
-pub enum RelayEvent<AccountId> {
+pub enum TransferEvent<AccountId> {
 	Burned(H160, AccountId, U256)
 }
 
 pub trait Trait: system::Trait + generic_asset::Trait {
 	type Event: From<Event> + Into<<Self as system::Trait>::Event>;
-	type Bridge: RelayEventEmitter<RelayEvent<Self::AccountId>>;
 }
 
 decl_storage! {
@@ -39,7 +38,9 @@ decl_storage! {
 }
 
 decl_event!(
-	pub enum Event {}
+	pub enum Event {
+		Transfer(Vec<u8>),
+	}
 );
 
 decl_error! {
@@ -58,7 +59,7 @@ decl_module! {
 		pub fn burn(origin, token_id: H160, amount: U256) -> DispatchResult {
 			let who = ensure_signed(origin)?;
 			<generic_asset::Module<T>>::do_burn(token_id, &who, amount)?;
-			T::Bridge::emit(APP_ID, RelayEvent::<T::AccountId>::Burned(token_id, who, amount));
+			RelayEvent::<T::AccountId>::Burned(token_id, who, amount);
 			Ok(())
 		}
 
@@ -76,7 +77,7 @@ impl<T: Trait> Module<T> {
 		match event {
 			ethereum::Event::SendERC20 { recipient, token, amount, ..} => {
 				if token.is_zero() {
-					return Err(DispatchError::Other("Invalid token address"))	
+					return Err(DispatchError::Other("Invalid token address"))
 				}
 				let account = match Self::bytes_to_account_id(&recipient) {
 					Some(account) => account,
